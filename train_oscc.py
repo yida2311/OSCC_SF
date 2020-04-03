@@ -67,7 +67,7 @@ print("creating models......")
 path_g = os.path.join(model_path, args.path_g)
 path_l = os.path.join(model_path, args.path_l)
 path_gl = os.path.join(model_path, args.path_gl)
-model = create_model_load_weights(n_class, mode, evaluation, path_g=path_g, path_g2l=path_g2l, path_l2g=path_l2g)
+model = create_model_load_weights(n_class, mode, evaluation, path_g=path_g, path_l=path_l, path=path_gl)
 
 ###################################
 num_epochs = args.num_epochs
@@ -206,11 +206,11 @@ for epoch in range(num_epochs):
                     if np.mean(np.nan_to_num(score_val["iou"][1:])) > best_pred:
                          best_pred = np.mean(np.nan_to_num(score_val["iou"][1:]))
                 log = ""
-                if self.mode == 1:
+                if mode == 1:
                     log = log + 'epoch [{}/{}] Global -- IoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, np.mean(np.nan_to_num(score_train_global["iou"][1:])), np.mean(np.nan_to_num(score_val_global["iou"][1:]))) + "\n"
                     log = log + "Global train:" + str(score_train_global["iou"]) + "\n"
                     log = log + "Global val:" + str(score_val_global["iou"]) + "\n"
-                elif self.mode == 2:
+                elif mode == 2:
                     log = log + 'epoch [{}/{}] Local  -- IoU: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, np.mean(np.nan_to_num(score_train_local["iou"][1:])), np.mean(np.nan_to_num(score_val_local["iou"][1:]))) + "\n"
                     log = log + "Local train:" + str(score_train_local["iou"]) + "\n"
                     log = log + "Local val:" + str(score_val_local["iou"]) + "\n"

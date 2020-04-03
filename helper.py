@@ -16,6 +16,9 @@ from PIL import Image
 # torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = True
 
+transformer = transforms.Compose([
+        transforms.ToTensor(),
+])
 
 def _mask_transform(mask):
     target = np.array(mask).astype('int32')
@@ -63,6 +66,10 @@ def collate(batch):
     batch_dict = {}
     for key in batch[0].keys():
         batch_dict[key] = [b[key] for b in batch]
+    for key in batch_dict.keys():
+        if not (key=='output_size' or key=='id'):
+            batch_dict[key] = torch.stack(batch_dict[key], dim=0)
+
     return batch_dict
 
 
@@ -114,22 +121,23 @@ class Trainer(object):
 
     def train(self, sample, model):
         model.train()
-        labels = sample['label']
-        labels_npy = masks_transform(labels, numpy=True)
-        labels_torch = masks_transform(labels)
-        h, w = sample['output_size']
-
+        labels = sample['label'].squeeze(1).long()
+        labels_npy = np.array(labels)
+        labels_torch = labels.cuda()
+        h, w = sample['output_size'][0]
+        # print(labels[0].size)
         if self.mode == 1:  # global
-            img_g = images_transform(sample['img_g'])
+            img_g = sample['image_g'].cuda()
             outputs_g = model.forward(img_g)
             outputs_g = F.interpolate(outputs_g, size=(h, w), mode='bilinear')
+            # print(outputs_g.size(), labels_torch.size())
             loss = self.criterion(outputs_g, labels_torch)
             loss.backward()
             self.optimizer.step()
             self.optimizer.zero_grad()
         
         if self.mode == 2:  # local
-            img_l = images_transform(sample['img_l'])
+            img_l = sample['image_l'].cuda()
             outputs_l = model.forward(img_l)
             outputs_l = F.interpolate(outputs_l, size=(h, w), mode='bilinear')
             loss = self.criterion(outputs_l, labels_torch)
@@ -138,8 +146,8 @@ class Trainer(object):
             self.optimizer.zero_grad()
         
         if self.mode == 3:  # global&local
-            img_g = images_transform(sample['img_g'])
-            img_l = images_transform(sample['img_l'])
+            img_g = sample['image_g'].cuda()
+            img_l = sample['image_l'].cuda()
             outputs, outputs_g, outputus_l, mse = model.forward(img_g, img_l, target=labels_torch)
             loss = 2* self.criterion(outputs, labels_torch) + self.criterion(outputs_g, labels_torch) + self.criterion(outputus_l, labels_torch) + self.fmreg * mse
             loss.backward()
@@ -193,24 +201,24 @@ class Evaluator(object):
     def eval_test(self, sample, model):
         with torch.no_grad():
             ids = sample['id']
-            h, w = sample['output_size']
+            h, w = sample['output_size'][0]
             if not self.test:
-                labels = sample['label']
-                labels_npy = masks_transform(labels, numpy=True)
+                labels = sample['label'].squeeze(1).long()
+                labels_npy = np.array(labels)
 
             if self.mode == 1:  # global
-                img_g = images_transform(sample['img_g'])
+                img_g = sample['image_g'].cuda()
                 outputs_g = model.forward(img_g)
                 outputs_g = F.interpolate(outputs_g, size=(h, w), mode='bilinear')
         
             if self.mode == 2:  # local
-                img_l = images_transform(sample['img_l'])
+                img_l = sample['image_l'].cuda()
                 outputs_l = model.forward(img_l)
                 outputs_l = F.interpolate(outputs_l, size=(h, w), mode='bilinear')
         
             if self.mode == 3:  # global&local
-                img_g = images_transform(sample['img_g'])
-                img_l = images_transform(sample['img_l'])
+                img_g = sample['image_g'].cuda()
+                img_l = sample['image_l'].cuda()
                 # no target
                 outputs, outputs_g, outputus_l, mse = model.forward(img_g, img_l)
         

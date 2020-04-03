@@ -25,7 +25,7 @@ class Options():
         parser.add_argument('--mode', type=int, default=1, choices=[1, 2, 3], help='mode for training procedure. 1: train global branch only. 2: train local branch with fixed global branch. 3: train global branch with fixed local branch')
         parser.add_argument('--evaluation', action='store_true', default=False, help='evaluation only')
         parser.add_argument('--batch_size', type=int, default=6, help='batch size for origin global image (without downsampling)')
-        parser.add_argument('--size_crop', type=int, default=3903, help='size (in pixel) for cropped subslide global image')
+        parser.add_argument('--size_crop', type=int, default=2048, help='size (in pixel) for cropped subslide global image')
         parser.add_argument('--path_g', type=str, default="", help='name for global model path')
         parser.add_argument('--path_l', type=str, default="", help='name for local from global model path')
         parser.add_argument('--path_gl', type=str, default="", help='name for global from local model path')
