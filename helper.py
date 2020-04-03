@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision import transforms
 
-from models.global_local_ensemble import FPN_GL, get_fpn_global, get_fpn_local
+from models.global_local_ensemble import FPN_GL, get_fpn_global, get_fpn_local, Parallel2Single
 from utils.metrics import ConfusionMatrix, AverageMeter
 from PIL import Image
 
@@ -82,7 +82,7 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
         model = FPN_GL(n_class, path_g=path_g, path_l=path_l)
         if evaluation and path:
             state = model.state_dict()
-            state.update(torch.load(path))
+            state.update(Parallel2Single(torch.load(path)))
             model.load_state_dict(state)
     model = nn.DataParallel(model)
     model = model.cuda()
@@ -97,13 +97,14 @@ def get_optimizer(model, mode=1, learning_rate=2e-5):
 
 
 class Trainer(object):
-    def __init__(self, criterion, optimizer, n_class, mode=1, fmreg=0.15):
+    def __init__(self, criterion, optimizer, n_class, sub_batchsize, mode=1, fmreg=0.15):
         self.criterion = criterion
         self.optimizer = optimizer
         self.metrics_global = ConfusionMatrix(n_class)
         self.metrics_local = ConfusionMatrix(n_class)
         self.metrics = ConfusionMatrix(n_class)
         self.n_class = n_class
+        self.sub_batchsize = sub_batchsize
         self.mode = mode
         self.fmreg = fmreg # regulization item
 
@@ -138,19 +139,35 @@ class Trainer(object):
         
         if self.mode == 2:  # local
             img_l = sample['image_l'].cuda()
-            outputs_l = model.forward(img_l)
-            outputs_l = F.interpolate(outputs_l, size=(h, w), mode='bilinear')
-            loss = self.criterion(outputs_l, labels_torch)
-            loss.backward()
+            batch_size = img_l.size(0)
+            idx = 0
+            outputs_l = []
+            while idx+self.sub_batchsize <= batch_size:
+                output_l = model.forward(img_l[idx:idx+self.sub_batchsize])
+                output_l = F.interpolate(output_l, size=(h, w), mode='bilinear')
+                outputs_l.append(output_l)
+                loss = self.criterion(output_l, labels_torch[idx:idx+self.sub_batchsize])
+                loss.backward()
+                idx += self.sub_batchsize
+
+            outputs_l = torch.cat(outputs_l, dim=0)
             self.optimizer.step()
             self.optimizer.zero_grad()
         
         if self.mode == 3:  # global&local
             img_g = sample['image_g'].cuda()
             img_l = sample['image_l'].cuda()
-            outputs, outputs_g, outputus_l, mse = model.forward(img_g, img_l, target=labels_torch)
-            loss = 2* self.criterion(outputs, labels_torch) + self.criterion(outputs_g, labels_torch) + self.criterion(outputus_l, labels_torch) + self.fmreg * mse
-            loss.backward()
+            batch_size = img_l.size(0)
+            idx = 0
+            outputs = []; outputs_g = []; outputs_l = []
+            while idx+self.sub_batchsize <= batch_size:
+                output, output_g, output_l, mse = model.forward(img_g[idx:idx+self.sub_batchsize], img_l[idx:idx+self.sub_batchsize], target=labels_torch[idx:idx+self.sub_batchsize])
+                outputs.append(output); outputs_g.append(output_g); outputs_l.append(output_l)
+                loss = 2* self.criterion(output, labels_torch[idx:idx+self.sub_batchsize]) + self.criterion(output_g, labels_torch[idx:idx+self.sub_batchsize]) + \
+                        self.criterion(output_l, labels_torch[idx:idx+self.sub_batchsize]) + self.fmreg * mse
+                loss.backward()
+                idx += self.sub_batchsize
+            outputs = torch.cat(outputs, dim=0); outputs_g = torch.cat(outputs_g, dim=0); outputs_l = torch.cat(outputs_l, dim=0) 
             self.optimizer.step()
             self.optimizer.zero_grad()
         
@@ -178,11 +195,12 @@ class Trainer(object):
 
 
 class Evaluator(object):
-    def __init__(self, n_class, mode=1, test=False):
+    def __init__(self, n_class, sub_batchsize, mode=1, test=False):
         self.metrics_global = ConfusionMatrix(n_class)
         self.metrics_local = ConfusionMatrix(n_class)
         self.metrics = ConfusionMatrix(n_class)
         self.n_class = n_class
+        self.sub_batchsize = sub_batchsize
         self.mode = mode
         self.test = test
 
@@ -213,14 +231,31 @@ class Evaluator(object):
         
             if self.mode == 2:  # local
                 img_l = sample['image_l'].cuda()
-                outputs_l = model.forward(img_l)
-                outputs_l = F.interpolate(outputs_l, size=(h, w), mode='bilinear')
+                batch_size = img_l.size(0)
+                idx = 0
+                outputs_l = []
+                while idx+self.sub_batchsize <= batch_size:
+                    output_l = model.forward(img_l[idx:idx+self.sub_batchsize])
+                    output_l = F.interpolate(output_l, size=(h, w), mode='bilinear')
+                    outputs_l.append(output_l)
+                    idx += self.sub_batchsize
+
+                outputs_l = torch.cat(outputs_l, dim=0)
         
             if self.mode == 3:  # global&local
                 img_g = sample['image_g'].cuda()
                 img_l = sample['image_l'].cuda()
+                batch_size = img_l.size(0)
+                idx = 0
+                outputs = []; outputs_g = []; outputs_l = []
+                while idx+self.sub_batchsize <= batch_size:
+                    output, output_g, output_l, mse = model.forward(img_g[idx:idx+self.sub_batchsize], img_l[idx:idx+self.sub_batchsize])
+                    outputs.append(output); outputs_g.append(output_g); outputs_l.append(output_l)
+                    idx += self.sub_batchsize
+                
+                outputs = torch.cat(outputs, dim=0); outputs_g = torch.cat(outputs_g, dim=0); outputs_l = torch.cat(outputs_l, dim=0) 
                 # no target
-                outputs, outputs_g, outputus_l, mse = model.forward(img_g, img_l)
+                # outputs, outputs_g, outputs_l, mse = model.forward(img_g, img_l)
         
         # predictions
         if self.mode == 1:

@@ -7,4 +7,4 @@ python train_oscc.py \
 --log_path "results/logs/" \
 --task_name "fpn_sf_global" \
 --mode 1 \
---batch_size 4 \
+--batch_size 8 \

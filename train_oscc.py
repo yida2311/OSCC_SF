@@ -52,6 +52,7 @@ print("mode:", mode, "evaluation:", evaluation, "test:", test)
 ###################################
 print("preparing datasets and dataloaders......")
 batch_size = args.batch_size
+sub_batchsize = args.sub_batchsize
 
 data_time = AverageMeter("DataTime", ':6.3f')
 batch_time = AverageMeter("BatchTime", ':6.3f')
@@ -92,8 +93,8 @@ if not evaluation:
     writer = SummaryWriter(log_dir=log_path + task_name)
     f_log = open(log_path + task_name + ".log", 'w')
 
-trainer = Trainer(criterion, optimizer, n_class, mode=mode, fmreg=fmreg)
-evaluator = Evaluator(n_class, mode=mode, test=test)
+trainer = Trainer(criterion, optimizer, n_class, sub_batchsize, mode=mode, fmreg=fmreg)
+evaluator = Evaluator(n_class, sub_batchsize, mode=mode, test=test)
 
 best_pred = 0.0
 print("start training......")
@@ -104,7 +105,7 @@ for epoch in range(num_epochs):
 
     start_time = time.time()
     for i_batch, sample_batched in enumerate(tbar):
-        print(i_batch)
+        # print(i_batch)
         data_time.update(time.time()-start_time)
         if evaluation:  # evaluation pattern: no training
             break

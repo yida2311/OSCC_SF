@@ -7,6 +7,7 @@ python train_oscc.py \
 --log_path "./results/logs/" \
 --task_name "fpn_sf_global-local" \
 --mode 3 \
---batch_size 1 \
---path_g  "fpn_sf_global/fpn_sf_global.epoch2.pth"\
---path_l  "fpn_sf_local/fpn_sf_local.epoch2.pth" \
+--batch_size 4 \
+--sub_batchsize 1 \
+--path_g "fpn_sf_global/fpn_sf_global.epoch0.pth" \
+--path_l "fpn_sf_local/fpn_sf_local.epoch0.pth" \
