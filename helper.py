@@ -77,7 +77,7 @@ def create_model_load_weights(n_class, mode=1, evaluation=False, path_g=None, pa
     if mode == 1:
         model = get_fpn_global(n_class, upsample, pretrained=evaluation, path=path_g)
     elif mode == 2:
-        model = get_fpn_global(n_class, upsample, pretrained=evaluation, path=path_l)   
+        model = get_fpn_local(n_class, upsample, pretrained=evaluation, path=path_l)   
     elif mode == 3:
         model = FPN_GL(n_class, path_g=path_g, path_l=path_l)
         if evaluation and path:
