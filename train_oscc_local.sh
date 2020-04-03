@@ -5,6 +5,6 @@ python train_oscc.py \
 --meta_path "/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_sf/trainval_mini.csv" \
 --model_path "results/saved_models/" \
 --log_path "results/logs/" \
---task_name "fpn_sf_global" \
---mode 1 \
---batch_size 4 \
+--task_name "fpn_sf_local" \
+--mode 2 \
+--batch_size 1 \

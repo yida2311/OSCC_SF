@@ -33,13 +33,15 @@ model_path = args.model_path
 if not os.path.isdir(model_path): 
     os.makedirs(model_path)
 
-
 log_path = args.log_path
 if not os.path.isdir(log_path): 
     os.makedirs(log_path)
 
 task_name = args.task_name
 print(task_name)
+
+if not os.path.isdir(os.path.join(model_path, task_name)): 
+    os.makedirs(os.path.join(model_path, task_name))
 ###################################
 
 mode = args.mode # 1: train global; 2: train local ; 3: train global & local
@@ -188,8 +190,8 @@ for epoch in range(num_epochs):
             batch_time.reset()
 
             if not (test or evaluation): 
-                if epoch // 2:
-                    torch.save(model.state_dict(), "./saved_models/" + task_name + ".epoch" + str(epoch) + ".pth")
+                if epoch % 2 == 0:
+                    torch.save(model.state_dict(), "./results/saved_models/" + task_name + "/" + task_name + ".epoch" + str(epoch) + ".pth")
 
             if test:  # one epoch
                 break
