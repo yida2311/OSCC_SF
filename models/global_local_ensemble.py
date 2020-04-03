@@ -8,13 +8,22 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 import numpy as np
+from collections import OrderedDict
+
+
+def Parallel2Single(original_state):
+    converted = OrderedDict()
+    for k, v in original_state.items():
+        name = k[7:]
+        converted[name] = v
+    return converted
 
 
 def get_fpn_global(num_classes, mode, pretrained=False, path=None):
     model = FPN_G(num_classes, mode)
     if pretrained and path:
         state = model.state_dict()
-        state.update(torch.load(path))
+        state.update(Parallel2Single(torch.load(path)))
         model.load_state_dict(state)
     
     return model
@@ -23,7 +32,7 @@ def get_fpn_local(num_classes, mode, pretrained=False, path=None):
     model = FPN_L(num_classes, mode)
     if pretrained and path:
         state = model.state_dict()
-        state.update(torch.load(path))
+        state.update(Parallel2Single(torch.load(path)))
         model.load_state_dict(state)
     
     return model
@@ -84,11 +93,13 @@ class FPN_GL(nn.Module):
         self.ensemble_conv = nn.Conv2d(256*2, num_classes, kernel_size=3, stride=1, padding=1)
         self.mse = nn.MSELoss()
         self.ce = nn.CrossEntropyLoss(reduce=False)
+        self.sigmoid = nn.Sigmoid()
+        self.logsoftmax = nn.LogSoftmax()
         #init
         self._init_params()
 
     def _init_params(self):
-        nn.init.normal_(self.ensmble_conv.weight, mean=0, std=0.01)
+        nn.init.normal_(self.ensemble_conv.weight, mean=0, std=0.01)
         for m in self.dual_fam1.children():
             if hasattr(m, 'weight'):
                 nn.init.normal_(m.weight, mean=0, std=0.01)
@@ -113,34 +124,41 @@ class FPN_GL(nn.Module):
     def forward(self, img_g, img_l, target=None):
         # _, h, w = target.size() # x8
         c2_g, c3_g, c4_g, c5_g = self.fpn_global.backbone(img_g)
-        c2_l, c3_l, c4_l, c5_l = self.fpn_global.backbone(img_l)
+        c2_l, c3_l, c4_l, c5_l = self.fpn_local.backbone(img_l)
 
         # calculate feature fusion weight
-        with torch.no_grad():
-            output_l = self.fpn_local.fpn.forward(c2_l, c3_l, c4_l, c5_l) # x8
-            _, _, h, w = output_l.size()
-            output_g = self.fpn_global.fpn.forward(c2_g, c3_g, c4_g, c5_g) # x16
-            output_g = F.interpolate(output_g, size=(h, w), mode='bilinear')
+        # with torch.no_grad():
+        #     output_l = self.fpn_local.fpn.forward(c2_l, c3_l, c4_l, c5_l) # x8
+        #     _, _, h, w = output_l.size()
+        #     output_g = self.fpn_global.fpn.forward(c2_g, c3_g, c4_g, c5_g) # x16
+        #     output_g = F.interpolate(output_g, size=(h, w), mode='bilinear')
             
-            if target:
-                loss_g = self.ce(output_g, target)
-                loss_l = self.ce(output_l, target)
-            else:
-                loss_g = nn.mean(nn.LogSoftmax(output_g, dim=1), dim=1)
-                loss_l = nn.mean(nn.LogSoftmax(output_l, dim=1), dim=1)
-            weight_g = nn.Sigmoid(loss_l-loss_g) # x8
-            weight_l = nn.Sigmoid(loss_g-loss_l) # x8
+        #     if target is not None:
+        #         loss_g = self.ce(output_g, target)
+        #         loss_l = self.ce(output_l, target)
+        #     else:
+        #         loss_g = torch.mean(self.logsoftmax(output_g), dim=1)
+        #         loss_l = torch.mean(self.logsoftmax(output_l), dim=1)
+        #     weight_g = self.sigmoid(loss_l-loss_g) # x8
+        #     weight_l = self.sigmoid(loss_g-loss_l) # x8
+
+        #     if weight_g.dim() == 3:
+        #         weight_g = weight_g.unsqueeze(0)
+        #     if weight_l.dim() == 3:
+        #         weight_l = weight_l.unsqueeze(0)
         
         # get lateral features from two branch
         ps_g = self.fpn_global.fpn.get_fusion_feature_pyramid(c2_g, c3_g, c4_g, c5_g)
         ps_l = self.fpn_local.fpn.get_fusion_feature_pyramid(c2_l, c3_l, c4_l, c5_l)
         
         # align and fuse features
-        ts_g, ts_l = self.align_fuse_features(ps_g, ps_l, weight_g, weight_l)
+        # ts_g, ts_l = self.align_fuse_features(ps_g, ps_l, weight_g, weight_l)
+        ts_g, ts_l = self.align_fuse_features(ps_g, ps_l)
 
         # classify
         output_g, ensemble_g = self.fpn_global.fpn.forward_with_lateral(ts_g)
         output_l, ensemble_l = self.fpn_local.fpn.forward_with_lateral(ts_l)
+        _, _, h, w = output_l.size()
         output_g = F.interpolate(output_g, size=(h, w), mode='bilinear')
         ensemble_g = F.interpolate(ensemble_g, size=(h, w), mode='bilinear')
 
@@ -151,7 +169,7 @@ class FPN_GL(nn.Module):
 
         return output, output_g, output_l, mse
         
-    def align_fuse_features(ps_g, ps_l, weight_g, weight_l):
+    def align_fuse_features(self, ps_g, ps_l, weight_g=None, weight_l=None):
         # align lateral features
         p2_g, p2_l = self.dual_fam1(ps_g[0], ps_l[0])
         p3_g, p3_l = self.dual_fam1(ps_g[1], ps_l[1])
@@ -159,26 +177,32 @@ class FPN_GL(nn.Module):
         p5_g, p5_l = self.dual_fam1(ps_g[3], ps_l[3])
 
         # reweight fusion feature
-        p2_g = p2_g.mul(weight_g); p2_l = p2_l.mul(weight_l)
-        p3_g = p3_g.mul(weight_g); p3_l = p3_l.mul(weight_l)
-        p4_g = p4_g.mul(weight_g); p4_l = p4_l.mul(weight_l)
-        p5_g = p5_g.mul(weight_g); p5_l = p5_l.mul(weight_l)
+        # # print(p2_g.size(), weight_g.size())
+        # p2_g = self.resize_mul(p2_g, weight_g); p2_l = self.resize_mul(p2_l, weight_l)
+        # p3_g = self.resize_mul(p3_g, weight_g); p3_l = self.resize_mul(p3_l, weight_l)
+        # p4_g = self.resize_mul(p4_g, weight_g); p4_l = self.resize_mul(p4_l, weight_l)
+        # p5_g = self.resize_mul(p5_g, weight_g); p5_l = self.resize_mul(p5_l, weight_l)
 
         # fuse lateral features
-        t2_g = self.smooth1_g(torch.cat([ps_g[0], p2_l])); t2_l = self.smooth1_l(torch.cat([ps_l[0], p2_g]))
-        t3_g = self.smooth2_g(torch.cat([ps_g[1], p3_l])); t3_l = self.smooth2_l(torch.cat([ps_l[1], p3_g]))
-        t4_g = self.smooth3_g(torch.cat([ps_g[2], p4_l])); t4_l = self.smooth3_l(torch.cat([ps_l[2], p4_g]))
-        t5_g = self.smooth4_g(torch.cat([ps_g[3], p5_l])); t5_l = self.smooth4_l(torch.cat([ps_l[3], p5_g]))
+        # print(ps_g[0].size(), p2_l.size(), ps_l[0].size(), p2_g.size())
+        t2_g = self.smooth1_g(torch.cat([ps_g[0], p2_l], dim=1)); t2_l = self.smooth1_l(torch.cat([ps_l[0], p2_g], dim=1))
+        t3_g = self.smooth2_g(torch.cat([ps_g[1], p3_l], dim=1)); t3_l = self.smooth2_l(torch.cat([ps_l[1], p3_g], dim=1))
+        t4_g = self.smooth3_g(torch.cat([ps_g[2], p4_l], dim=1)); t4_l = self.smooth3_l(torch.cat([ps_l[2], p4_g], dim=1))
+        t5_g = self.smooth4_g(torch.cat([ps_g[3], p5_l], dim=1)); t5_l = self.smooth4_l(torch.cat([ps_l[3], p5_g], dim=1))
 
         return [t2_g, t3_g, t4_g, t5_g], [t2_l, t3_l, t4_l, t5_l]
 
-
+    def resize_mul(self, x, weight):
+        _, _, h, w = x.size()
+        weight = F.interpolate(weight, (h, w), mode='bilinear')
+        
+        return x.mul(weight)
 
 class DualFAM(nn.Module):
     def __init__(self, features=256):
         super().__init__()
-        self.smooth1_x = nn.Conv2d(features, features, kernel_size=1, stride=1, padding=0)
-        self.smooth1_y = nn.Conv2d(features, features, kernel_size=1, stride=1, padding=0)
+        self.smooth_x = nn.Conv2d(features, features, kernel_size=1, stride=1, padding=0)
+        self.smooth_y = nn.Conv2d(features, features, kernel_size=1, stride=1, padding=0)
         self.flow_x = nn.Sequential(nn.Conv2d(features*2, features, kernel_size=1, stride=1, padding=0),
                                 nn.BatchNorm2d(features),
                                 nn.ReLU(True),
@@ -202,8 +226,8 @@ class DualFAM(nn.Module):
         y_smooth = self.smooth_y(y)
         x_resize = F.interpolate(x, size=(h_y, w_y), mode='bilinear', align_corners=True)
         y_resize = F.interpolate(y, size=(h_x, w_x), mode='bilinear', align_corners=True)
-        flow_x = self.flow_x(torch.cat([x_smooth, y_resize], dim=1))
-        flow_y = self.flow_y(toch.cat([y_smooth, x_resize], dim=1))
+        flow_x = self.flow_x(torch.cat([y_smooth, x_resize], dim=1))
+        flow_y = self.flow_y(torch.cat([x_smooth, y_resize], dim=1))
         x_warp = self.stn(x, flow_x)
         y_warp = self.stn(y, flow_y)
 
@@ -211,7 +235,8 @@ class DualFAM(nn.Module):
     
     def stn(self, x, flow):
         _, _, H, W = flow.size()
-        grid_h, grid_w = torch.meshgrid(torch.range(0, H-1)/H, torch.range(0, W-1)/W)
+        grid_h, grid_w = torch.meshgrid(torch.arange(0, H)/H, torch.arange(0, W)/W)
+        grid_h = grid_h.float().cuda(); grid_w = grid_w.float().cuda()
         flow[:, 0] += grid_h
         flow[:, 1] += grid_w
         flow = flow.permute(0, 2, 3, 1)

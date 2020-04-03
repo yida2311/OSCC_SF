@@ -66,7 +66,7 @@ class FPN_SF(nn.Module):
         '''
         _, _, H, W = y.size()
         if self.mode == 'Bilinear':
-            return F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True) + y
+            return F.interpolate(x, size=(H, W), mode='bilinear') + y
      
     def forward(self, c2, c3, c4, c5):
         # upsample
@@ -85,9 +85,9 @@ class FPN_SF(nn.Module):
             p2 = self._upsample_add(p3, self.laterlayer1(c2))
             # # deep supervision
             _, _, H, W = p2.size()
-            p5 = F.interpolate(p5, size=(H, W), mode='bilinear', align_corners=True)
-            p4 = F.interpolate(p4, size=(H, W), mode='bilinear', align_corners=True)
-            p3 = F.interpolate(p3, size=(H, W), mode='bilinear', align_corners=True)
+            p5 = F.interpolate(p5, size=(H, W), mode='bilinear')
+            p4 = F.interpolate(p4, size=(H, W), mode='bilinear')
+            p3 = F.interpolate(p3, size=(H, W), mode='bilinear')
         ensemble = self.smooth(torch.cat([p5, p4, p3, p2], dim=1))
         output = self.classify(ensemble)
         
@@ -116,9 +116,9 @@ class FPN_SF(nn.Module):
             p2 = self._upsample_add(p3, ps[0])
             # # deep supervision
             _, _, H, W = p2.size()
-            p5 = F.interpolate(p5, size=(H, W), mode='bilinear', align_corners=True)
-            p4 = F.interpolate(p4, size=(H, W), mode='bilinear', align_corners=True)
-            p3 = F.interpolate(p3, size=(H, W), mode='bilinear', align_corners=True)
+            p5 = F.interpolate(p5, size=(H, W), mode='bilinear')
+            p4 = F.interpolate(p4, size=(H, W), mode='bilinear')
+            p3 = F.interpolate(p3, size=(H, W), mode='bilinear')
         ensemble = self.smooth(torch.cat([p5, p4, p3, p2], dim=1))
         output = self.classify(ensemble)
         
@@ -132,9 +132,9 @@ class FPN_SF(nn.Module):
             p3 = self.fam3_ext(ps[1], p2)
         else:
             _, _, H, W = p2.size()
-            p5 = F.interpolate(p5, size=(H, W), mode='bilinear', align_corners=True)
-            p4 = F.interpolate(p4, size=(H, W), mode='bilinear', align_corners=True)
-            p3 = F.interpolate(p3, size=(H, W), mode='bilinear', align_corners=True)
+            p5 = F.interpolate(p5, size=(H, W), mode='bilinear')
+            p4 = F.interpolate(p4, size=(H, W), mode='bilinear')
+            p3 = F.interpolate(p3, size=(H, W), mode='bilinear')
         ensemble = self.smooth(torch.cat([p5, p4, p3, p2], dim=1))
         output = self.classify(ensemble)
 
@@ -162,15 +162,15 @@ class FAM(nn.Module):
         _, _, H, W = y.size()
         x_smooth = self.smooth_up(x)
         y_smooth = self.smooth_d(y)
-        x_smooth = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
+        x_smooth = F.interpolate(x, size=(H, W), mode='bilinear')
         flow = self.flow(torch.cat([x_smooth, y_smooth], dim=1))
         x_warp = self.stn(x, flow)
         return x_warp + y
     
     def stn(self, x, flow):
         _, _, H, W = flow.size()
-        grid_h, grid_w = torch.meshgrid(torch.range(0, H-1)/H, torch.range(0, W-1)/W)
-        grid_h = grid_h.cuda(); grid_w = grid_w.cuda()
+        grid_h, grid_w = torch.meshgrid(torch.arange(0, H)/H, torch.arange(0, W)/W)
+        grid_h = grid_h.float().cuda(); grid_w = grid_w.float().cuda()
         flow[:, 0] += grid_h
         flow[:, 1] += grid_w
         flow = flow.permute(0, 2, 3, 1)
