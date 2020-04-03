@@ -9,7 +9,7 @@ def get_fpn_sf_global(num_classes, mode):
 
 
 def get_fpn_sf_local(num_classes, mode):
-    return FPN_SF(num_classes, expansion=2, mode=mode) 
+    return FPN_SF(num_classes, expansion=1, mode=mode) 
 
 
 class FPN_SF(nn.Module):
@@ -34,12 +34,12 @@ class FPN_SF(nn.Module):
         # self.laterlayer3_ext =  nn.Conv2d(64*6, 256, kernel_size=1, stride=1, padding=0)
         # FAM layers
         if self.mode == 'SemanticFlow':
-            self.fam1 = FAM(feature=256)
-            self.fam2 = FAM(feature=256)
-            self.fam3 = FAM(feature=256)
-            self.fam1_ext = FAM(feature=256)
-            self.fam2_ext = FAM(feature=256)
-            self.fam3_ext = FAM(feature=256) 
+            self.fam1 = FAM(features=256)
+            self.fam2 = FAM(features=256)
+            self.fam3 = FAM(features=256)
+            self.fam1_ext = FAM(features=256)
+            self.fam2_ext = FAM(features=256)
+            self.fam3_ext = FAM(features=256) 
         # classify layer
         self.smooth = nn.Sequential(nn.Conv2d(256*4, 256, kernel_size=1, stride=1, padding=0),
                                 nn.BatchNorm2d(256),
@@ -52,7 +52,7 @@ class FPN_SF(nn.Module):
     def _init_params(self):
         for m in self.children():
             if hasattr(m, 'weight'):
-                nn.init_normal_(m.weight, mean=0, std=0.01)
+                nn.init.normal_(m.weight, mean=0, std=0.01)
             if hasattr(m, 'bias'):
                 nn.init.constant_(m.bias, 0)
 
@@ -89,7 +89,7 @@ class FPN_SF(nn.Module):
             p4 = F.interpolate(p4, size=(H, W), mode='bilinear', align_corners=True)
             p3 = F.interpolate(p3, size=(H, W), mode='bilinear', align_corners=True)
         ensemble = self.smooth(torch.cat([p5, p4, p3, p2], dim=1))
-        output = self.classify(ensemble))
+        output = self.classify(ensemble)
         
         return output
     
@@ -120,7 +120,7 @@ class FPN_SF(nn.Module):
             p4 = F.interpolate(p4, size=(H, W), mode='bilinear', align_corners=True)
             p3 = F.interpolate(p3, size=(H, W), mode='bilinear', align_corners=True)
         ensemble = self.smooth(torch.cat([p5, p4, p3, p2], dim=1))
-        output = self.classify(ensemble))
+        output = self.classify(ensemble)
         
         return output, ensemble
 
@@ -136,7 +136,7 @@ class FPN_SF(nn.Module):
             p4 = F.interpolate(p4, size=(H, W), mode='bilinear', align_corners=True)
             p3 = F.interpolate(p3, size=(H, W), mode='bilinear', align_corners=True)
         ensemble = self.smooth(torch.cat([p5, p4, p3, p2], dim=1))
-        output = self.classify(ensemble))
+        output = self.classify(ensemble)
 
         return output, ensemble
 
@@ -163,13 +163,14 @@ class FAM(nn.Module):
         x_smooth = self.smooth_up(x)
         y_smooth = self.smooth_d(y)
         x_smooth = F.interpolate(x, size=(H, W), mode='bilinear', align_corners=True)
-        flow = self.flow(toch.cat([x_smooth, y_smooth], dim=1))
+        flow = self.flow(torch.cat([x_smooth, y_smooth], dim=1))
         x_warp = self.stn(x, flow)
         return x_warp + y
     
     def stn(self, x, flow):
         _, _, H, W = flow.size()
         grid_h, grid_w = torch.meshgrid(torch.range(0, H-1)/H, torch.range(0, W-1)/W)
+        grid_h = grid_h.cuda(); grid_w = grid_w.cuda()
         flow[:, 0] += grid_h
         flow[:, 1] += grid_w
         flow = flow.permute(0, 2, 3, 1)
@@ -183,7 +184,7 @@ class PSPModule(nn.Module):
         self.stages = nn.ModuleList([self._make_stage(features, size) for size in sizes])
         self.bottleneck = nn.Sequential(
                         nn.Conv2d(features * (len(sizes) + 1), out_features, kernel_size=1),
-                        nn.Conv2d(out_channels, out_channels, kernel_size=3, stride=1, padding=1)
+                        nn.Conv2d(out_features, out_features, kernel_size=3, stride=1, padding=1))
         self.relu = nn.ReLU()
 
     def _make_stage(self, features, size):

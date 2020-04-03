@@ -1,4 +1,8 @@
-from .resnet import resnet50, resnet18
+# from .resnet import resnet50, resnet18
+# from .resnet_dilation import resnet50, resnet18
+# from .resnet_dilated import resnet5_dilated_18 as resnet18
+from .resnet_dilated import resnet_dilated_50 as resnet50
+from .EfficientNet.EfficientNet_backbone import EfficientnetB0 as efficientnet
 from .fpn_semantci_flow import get_fpn_sf_global, get_fpn_sf_local
 import torch.nn as nn
 import torch.nn.functional as F
@@ -43,7 +47,8 @@ class FPN_L(nn.Module):
     def __init__(self, num_classes, mode):
         super(FPN_L, self).__init__()
         self.mode = mode
-        self.backbone = resnet18(True)
+        # self.backbone = resnet18(True)
+        self.backbone = efficientnet()
         self.fpn = get_fpn_sf_local(num_classes, mode=self.mode)
     
     def forward(self, img):
