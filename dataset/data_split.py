@@ -34,9 +34,9 @@ def make_trainval_mini(csv_dir, save_dir, num):
 
 if __name__ == '__main__':
     suffix = 'train'
-    root = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_gl/subslide/'
-    save_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_gl/'
-    csv_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_gl/trainval.csv'
+    root = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_sf/subslide/'
+    save_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_sf/'
+    csv_dir = '/media/ldy/e5a10f4e-18fd-4656-80d8-055bc4078655/OSCC_sf/trainval.csv'
 
-    trainval_split(root, suffix, save_dir)
-    make_trainval_mini(csv_dir, save_dir, num=60)
+    # trainval_split(root, suffix, save_dir)
+    make_trainval_mini(csv_dir, save_dir, num=120)

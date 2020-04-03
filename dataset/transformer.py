@@ -48,49 +48,38 @@ class Vflip(object):
 
 
 class RandomCrop(object):
-    def __init__(self, size):
+    def __init__(self, size, scale=8):
         if isinstance(size, tuple):
             self.size = size
         elif isinstance(size, int):
             self.size = (size, size)
         
-        self.resize = transforms.Resize(size=self.size)
+        self.scale = scale
     
     @staticmethod
-    def get_params(x, crop_size):
+    def get_params(x, y, crop_size, scale):
         state = False # if true, need resize
-        w, h = x.size
-        th, tw = crop_size
-        top, left, height,width = 0, 0, 0, 0
-
-        if w <= tw:
-            state = True
-            left = 0
-            width = w
-        else:
-            left = random.randint(0, w-tw)
-            width = tw
+        x_w, x_h = x.size
+        y_w, y_h = y.size
+        x_th, x_tw = crop_size
+        y_th, y_tw = int(x_th/scale), int(x_tw/scale)
         
-        if h <= th:
-            state = True
-            top = 0
-            height = h
-        else:
-            top = random.randint(0, h-th)
-            height = th
+        if x_w == x_tw and x_h == x_th:
+            return (0, 0, x_th, x_tw), (0, 0, y_w, y_h)
         
-        return (top, left, height,width), state
+        x_i = random.randint(0, x_h-x_th)
+        x_j = random.randint(0, x_w-x_tw)
+        y_i = int(x_i / scale)
+        y_j = int(x_j / scale)
+        
+        return (x_i, x_j, x_th, x_tw), (y_i, y_j, y_th, y_tw)
     
-    def __call__(self, *args):
-        box, state = self.get_params(args[0], self.size)
-        results = []
-        for arg in args:
-            crop_arg = F.crop(arg, box[0], box[1], box[2], box[3])
-            if state:
-                crop_arg = self.resize(crop_arg)
-            results.append(crop_arg)
-        return tuple(results)
+    def __call__(self, x, y):
+        box_x, box_y = self.get_params(x, y, self.size, self.scale)
+        crop_x = F.crop(x, box_x[0], box_x[1], box_x[2], box_x[3])
+        crop_y = F.crop(y, box_y[0], box_y[1], box_y[2], box_y[3])
 
+        return crop_x, crop_y
 
 class Transformer(object):
     def __init__(self, size):
@@ -113,6 +102,7 @@ class Transformer(object):
         img = self.to_tensor(img)
         img = self.normalize(img)
         img = transforms.ToPILImage()(img)
+        target = self.to_tensor(target.convert('I'))
 
         return img, target
 
@@ -129,6 +119,7 @@ class ValTransformer(object):
         img = self.to_tensor(img.convert('RGB'))
         img = self.normalize(img)
         img = transforms.ToPILImage()(img)
+        target = self.to_tensor(target.convert('I'))
         
         return img, target
 
@@ -144,5 +135,6 @@ class TestTransformer(object):
     def __call__(self, img, target):
         img, target = self.to_tensor(img.convert('RGB')), self.to_tensor(target.convert('I'))
         img = self.normalize(img)
+        img = transforms.ToPILImage()(img)
 
         return img, target

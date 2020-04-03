@@ -135,6 +135,7 @@ class DeepOSCC(data.Dataset):
         self.val = val
         self.transform = transform
         self.classdict = {1: "normal", 2: "mucosa", 3: "tumor", 0: "background"}
+        self.to_tensor = transforms.ToTensor()
 
         # self.to_tensor = transforms.ToTensor()
         samples = []
@@ -160,7 +161,6 @@ class DeepOSCC(data.Dataset):
         img, target = pil_loader(img_path), pil_loader(target_path)
         path_split = img_path.split('/')
         name = path_split[-1]
-        # print(name)
 
         if self.transform is not None:
             img, target = self.transform(img, target)
@@ -170,18 +170,17 @@ class DeepOSCC(data.Dataset):
         return sample
     
     def sample_generator(self, img, target, mode):
-        w, h = img.shape
-        sample['output_size'] = (h//8, w//8)
+        w, h = img.size
+        sample = {"output_size": (h//8, w//8), "label": target}
+    
         w = w//4; h = h//4
-        sample = {"label": target}
-
         if mode == 1:
-            sample['image_g'] = resize(img, (w, h))
+            sample['image_g'] = self.to_tensor(resize(img, (w, h)))
         elif mode == 2:
-            sample['image_l'] = img
+            sample['image_l'] = self.to_tensor(img)
         elif mode == 3:
-            sample['image_l'] = img
-            sample['image_g'] = resize(img, (w, h))
+            sample['image_l'] = self.to_tensor(img)
+            sample['image_g'] = self.to_tensor(resize(img, (w, h)))
         else:
             raise ValueError('Unmatched mode: {}'.format(mode))
 
