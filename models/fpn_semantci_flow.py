@@ -146,10 +146,11 @@ class FAM(nn.Module):
         super().__init__()
         self.smooth_up = nn.Conv2d(features, features, kernel_size=1, stride=1, padding=0)
         self.smooth_d = nn.Conv2d(features, features, kernel_size=1, stride=1, padding=0)
-        self.flow = nn.Sequential(nn.Conv2d(features*2, features, kernel_size=1, stride=1, padding=0),
-                                nn.BatchNorm2d(features),
-                                nn.ReLU(True),
-                                nn.Conv2d(features, 2, kernel_size=3, stride=1, padding=1))
+        self.flow = nn.Conv2d(features*2, 2, kernel_size=3, stride=1, padding=1, bias=True)
+        # self.flow = nn.Sequential(nn.Conv2d(features*2, features, kernel_size=1, stride=1, padding=0),
+        #                         nn.BatchNorm2d(features),
+        #                         nn.ReLU(True),
+        #                         nn.Conv2d(features, 2, kernel_size=3, stride=1, padding=1))
     
     def forward(self, x, y):
         '''Upsample and add two feature maps.

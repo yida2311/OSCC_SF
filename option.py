@@ -26,6 +26,7 @@ class Options():
         parser.add_argument('--evaluation', action='store_true', default=False, help='evaluation only')
         parser.add_argument('--batch_size', type=int, default=6, help='batch size for image pair')
         parser.add_argument('--sub_batchsize', type=int, default=2, help=' sub batch size for origin local image (without downsampling)')
+        parser.add_argument('--num_workers', type=int, default=4, help='num of workers for dataloader')
         parser.add_argument('--size_crop', type=int, default=1600, help='size (in pixel) for cropped subslide global image')
         parser.add_argument('--path_g', type=str, default="", help='name for global model path')
         parser.add_argument('--path_l', type=str, default="", help='name for local from global model path')
@@ -39,5 +40,5 @@ class Options():
         args = self.parser.parse_args()
         # default settings for epochs and lr
         args.num_epochs = 120
-        args.lr = 5e-5
+        args.lr = 1e-2
         return args

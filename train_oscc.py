@@ -53,16 +53,17 @@ print("mode:", mode, "evaluation:", evaluation, "test:", test)
 print("preparing datasets and dataloaders......")
 batch_size = args.batch_size
 sub_batchsize = args.sub_batchsize
+num_workers = args.num_workers
 
 data_time = AverageMeter("DataTime", ':6.3f')
 batch_time = AverageMeter("BatchTime", ':6.3f')
 
 transformer_train = Transformer(args.size_crop)
 dataset_train = DeepOSCC(data_path, meta_path, args, mode=mode, val=False, transform=transformer_train)
-dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=4, batch_size=batch_size, collate_fn=collate, shuffle=True, pin_memory=True)
+dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=True, pin_memory=True)
 transformer_val = ValTransformer(args.size_crop)
 dataset_val = DeepOSCC(data_path, meta_path, args, mode=mode, val=True, transform=transformer_val)
-dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=4, batch_size=batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
+dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=num_workers, batch_size=batch_size, collate_fn=collate, shuffle=False, pin_memory=True)
 
 ###################################
 print("creating models......")
