@@ -168,14 +168,15 @@ class FAM(nn.Module):
         return x_warp + y
     
     def stn(self, x, flow):
-        flow = flow.permute(0, 2, 3, 1)
         _, _, H, W = flow.size()
         grid = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)])
         grid = torch.stack(grid)
         grid = torch.unsqueeze(grid, 0).float().cuda()
         flow += grid
-        flow[..., 0] = 2 * (flow[..., 0]/(H-1) - 0.5)
-        flow[..., 1] = 2 * (flow[..., 1]/(W-1) - 0.5)
+        flow[:, 0, ...] = 2 * (flow[:, 0, ...]/(H-1) - 0.5)
+        flow[:, 1, ...] = 2 * (flow[:, 1, ...]/(W-1) - 0.5)
+
+        flow = flow.permute(0, 2, 3, 1)
         
         return F.grid_sample(x, flow)
 
